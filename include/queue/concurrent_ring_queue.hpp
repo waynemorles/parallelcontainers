@@ -131,6 +131,11 @@ public:
         uint64_t t = tail_.load(std::memory_order_acquire);
         return h == t;
     }
+    bool IsFull() const {
+        uint64_t h = head_.load(std::memory_order_acquire);
+        uint64_t t = tail_.load(std::memory_order_acquire);
+        return (int)(h - t) == capacity_;
+    }
 
 private:
     int capacity_;

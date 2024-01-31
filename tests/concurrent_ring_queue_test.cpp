@@ -4,7 +4,7 @@
 #include <chrono>
 #include <gtest/gtest.h>
 #include <thread>
-#include "queue/cocurrent_ring_queue.hpp"
+#include "queue/concurrent_ring_queue.hpp"
 
 int main(int argc, char* argv[]) {
     testing::InitGoogleTest(&argc, argv);
@@ -125,6 +125,32 @@ TEST(ConcurrentRingQueue, pushParllelConsumeParrllel) {
         if (producer[i].joinable()) {
             producer[i].join();
         }
+        if (consumer[i].joinable()) {
+            consumer[i].join();
+        }
+    }
+    ASSERT_TRUE(queue.Empty());
+}
+
+TEST(ConcurrentRingQueue, ConsumeParllel) {
+    ConcurrentRingQueue<int> queue(256);
+    static constexpr int TZ = 4;
+    static constexpr int COUNTER_PER_THREAD = 10000000;
+
+    std::atomic_int counter = COUNTER_PER_THREAD*TZ;
+
+    std::thread consumer[TZ];
+    for (int i=0; i<TZ; i++) {
+        consumer[i] = std::thread([&]() {
+                            while(counter.load(std::memory_order_relaxed)) {
+                                int val;
+                                if(queue.TryPop(val)) {
+                                    counter --;
+                                }
+                            }    
+                            });
+    }
+    for (int i=0; i<TZ; i++) {
         if (consumer[i].joinable()) {
             consumer[i].join();
         }
