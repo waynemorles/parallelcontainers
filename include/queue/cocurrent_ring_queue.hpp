@@ -67,15 +67,13 @@ public:
     ConcurrentRingQueue& operator=(const ConcurrentRingQueue&) = delete;
 
     template <typename... Args>
-    bool try_push(Args&& ... args) {
+    bool TryPush(Args&& ... args) {
         uint64_t head = head_.load(std::memory_order_relaxed);
         SpinWait wait;
         while (true) {
             uint64_t slot = head & (capacity_ - 1);
             Item* item = &base_[slot];
             uint64_t pos = item->position_.load(std::memory_order_acquire);
-            if (head > pos) return false;
-            if (head < pos) head = head_.load(std::memory_order_acquire);
             // head point to the newest allocated item, and allocate new item
             if (head == pos) {
                 if (head_.compare_exchange_weak(head, head+1)) {
@@ -87,25 +85,26 @@ public:
                     wait.Wait();
                 }
             }
+            if (head > pos) return false;
+            if (head < pos) head = head_.load(std::memory_order_acquire);
         }
     }
 
     template <typename V,
               typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, V&&>::value>::type>
-    void push(V&& v) noexcept {
-       while(!try_push(std::forward<V>(v))); 
+    void Push(V&& v) noexcept {
+       SpinWait wait;
+       while(!TryPush(std::forward<V>(v))) { wait.Wait(); }
     }
 
-    bool try_pop(T& v) {
+    bool TryPop(T& v) {
         uint64_t tail = tail_.load(std::memory_order_relaxed);
         SpinWait wait;
         while (true) {
             uint64_t slot = tail & (capacity_ - 1);
             Item* item = &base_[slot];
             uint64_t pos = item->position_.load(std::memory_order_acquire);
-            if (pos < tail + 1) return false;
-            if (pos > tail + 1) tail = tail_.load(std::memory_order_acquire);
             if (pos == tail + 1) {
                 if (tail_.compare_exchange_weak(tail, tail + 1)) {
                     v = std::move(item->data_);
@@ -116,12 +115,22 @@ public:
                     wait.Wait();
                 }
             }
+            if (pos < tail + 1) return false;
+            if (pos > tail + 1) tail = tail_.load(std::memory_order_acquire);
         }
     }
     
-    void pop(T& v) noexcept {
-        while(!try_pop(v));
+    void Pop(T& v) noexcept {
+       SpinWait wait;
+       while(!TryPop(v)) { wait.Wait(); }
     } 
+
+    int Capacity() const { return capacity_; }
+    bool Empty() const {
+        uint64_t h = head_.load(std::memory_order_acquire);
+        uint64_t t = tail_.load(std::memory_order_acquire);
+        return h == t;
+    }
 
 private:
     int capacity_;
