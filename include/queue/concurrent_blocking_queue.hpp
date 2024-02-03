@@ -19,6 +19,13 @@ public:
     template <typename V,
               typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, V&&>::value>::type>
+    bool TryPush(V&& v) noexcept {
+        return this->TryPush(v);        
+    }
+
+    template <typename V,
+              typename = typename std::enable_if<
+                std::is_nothrow_constructible<T, V&&>::value>::type>
     void Push(V&& v) noexcept {
         int tries = tries_;
         while (true) {
@@ -39,6 +46,10 @@ public:
                 tries = tries_;
             }
         }
+    }
+
+    bool TryPop(T& v) noexcept {
+        return this->TryPop(v);
     }
 
     void Pop(T& v) noexcept {
