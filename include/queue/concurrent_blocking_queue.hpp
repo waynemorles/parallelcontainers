@@ -15,12 +15,12 @@ public:
     ConcurrentBlockingQueue(int capacity, int tries) 
         : ConcurrentRingQueue<T,Allocator>(capacity),tries_(tries) {}
     virtual ~ConcurrentBlockingQueue() {}
-
+    
     template <typename V,
               typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, V&&>::value>::type>
-    bool TryPush(V&& v) noexcept {
-        return this->TryPush(v);        
+    bool TryPushQ(V&& v) noexcept {
+        return this->TryPush(std::forward<V>(v));        
     }
 
     template <typename V,
@@ -30,7 +30,7 @@ public:
         int tries = tries_;
         while (true) {
             tries --;
-            if (this->TryPush(v)) {
+            if (this->TryPush(std::forward<V>(v))) {
                 if (block_consumer) pop_cond_.notify_all();
                 return;
             }
@@ -48,7 +48,7 @@ public:
         }
     }
 
-    bool TryPop(T& v) noexcept {
+    bool TryPopQ(T& v) noexcept {
         return this->TryPop(v);
     }
 
@@ -82,6 +82,6 @@ private:
     int block_producer = 0;
 };
 
-}
-}
+} // namespace concurrent
+} // namespace morles
 
