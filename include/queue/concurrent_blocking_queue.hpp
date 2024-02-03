@@ -1,5 +1,6 @@
 
 #include <algorithm>
+#include <atomic>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -21,6 +22,7 @@ public:
               typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, V&&>::value>::type>
     bool TryPushQ(V&& v) noexcept {
+        if (wait_up_exited_.load(std::memory_order_acquire)) return false;
         return this->TryPush(std::forward<V>(v));        
     }
 
@@ -31,16 +33,17 @@ public:
         int tries = tries_;
         while (true) {
             tries --;
+            if (wait_up_exited_.load(std::memory_order_acquire)) return false;
             if (this->TryPush(std::forward<V>(v))) {
                 if (block_consumer_) pop_cond_.notify_all();
                 return true;
-            } else if (wait_up_exited_) return false;
+            } 
             if (!tries) {
                 {
                     std::unique_lock<std::mutex> lock(push_mutex_);
                     block_producer_ ++;
                     push_cond_.wait(lock, [&]{ 
-                         return !this->IsFull() || wait_up_exited_; 
+                         return !this->IsFull() || wait_up_exited_.load(std::memory_order_acquire); 
                                     });
                     block_producer_ --;
                 }
@@ -60,13 +63,13 @@ public:
             if (this->TryPop(v)) {
                 if (block_producer_) push_cond_.notify_all();
                 return true;
-            } else if (wait_up_exited_) return false;
+            } else if (wait_up_exited_.load(std::memory_order_relaxed)) return false;
             if (!tries) {
                 {
                     std::unique_lock<std::mutex> lock(pop_mutex_);
                     block_consumer_ ++;
                     pop_cond_.wait(lock, [&]{ 
-                        return !this->Empty() || wait_up_exited_; 
+                        return !this->Empty() || wait_up_exited_.load(std::memory_order_relaxed); 
                                    });
                     block_consumer_ --;
                 }
@@ -75,8 +78,9 @@ public:
         }
     }
 
+    // Wait until the queue is empty and exit
     void Wait() noexcept {
-        wait_up_exited_ = true;
+        wait_up_exited_.store(true, std::memory_order_release);
         int producer, consumer;
         while (true) {
             {
@@ -92,7 +96,9 @@ public:
                 consumer = block_consumer_;
             }
             if (consumer > 0) pop_cond_.notify_all();
-            if (consumer == 0) break;
+            if (consumer == 0) {
+                if (this->Empty()) break;
+            }
         }
     }
 
@@ -102,7 +108,7 @@ private:
     int tries_;
     int block_consumer_ = 0;
     int block_producer_ = 0;
-    volatile bool wait_up_exited_ = false;
+    std::atomic<bool> wait_up_exited_{false};
 };
 
 } // namespace concurrent
