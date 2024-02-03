@@ -20,7 +20,7 @@ TEST(ConcurrentBlockingQueue, test) {
     std::thread producer([&](){
                          while (true) {
                          for (int i=0; i<counter; i++) {
-                            queue.Push(i);
+                            queue.Put(i);
                          }
                          std::this_thread::sleep_for(std::chrono::seconds(10));
                          }
@@ -32,7 +32,7 @@ TEST(ConcurrentBlockingQueue, test) {
                          while (true) {
                          for (int i=0; i<counter; i++) {
                             int j;
-                            queue.Pop(j);
+                            queue.Take(j);
                             std::cout << "Pop " << j << std::endl;
                          }
                          std::this_thread::sleep_for(std::chrono::seconds(10));

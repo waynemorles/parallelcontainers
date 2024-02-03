@@ -21,7 +21,7 @@ public:
     template <typename V,
               typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, V&&>::value>::type>
-    bool TryPushQ(V&& v) noexcept {
+    bool TryPut(V&& v) noexcept {
         if (wait_up_exited_.load(std::memory_order_acquire)) return false;
         return this->TryPush(std::forward<V>(v));        
     }
@@ -29,7 +29,7 @@ public:
     template <typename V,
               typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, V&&>::value>::type>
-    bool Push(V&& v) noexcept {
+    bool Put(V&& v) noexcept {
         int tries = tries_;
         while (true) {
             tries --;
@@ -52,11 +52,11 @@ public:
         }
     }
 
-    bool TryPopQ(T& v) noexcept {
+    bool TryTake(T& v) noexcept {
         return this->TryPop(v);
     }
 
-    bool Pop(T& v) noexcept {
+    bool Take(T& v) noexcept {
         int tries = tries_;
         while (true) {
             tries --;
